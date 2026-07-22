@@ -1,0 +1,8 @@
+/storage/*.json
+/storage/*.jsonl
+/storage/uploads/*
+!/storage/.gitkeep
+!/storage/uploads/.gitkeep
+.env
+.DS_Store
+Thumbs.db

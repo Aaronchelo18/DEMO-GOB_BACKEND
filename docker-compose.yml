@@ -1,0 +1,8 @@
+services:
+  demo-gob-backend:
+    build: .
+    container_name: demo-gob-backend
+    ports:
+      - "8081:80"
+    volumes:
+      - ./storage:/var/www/html/storage
