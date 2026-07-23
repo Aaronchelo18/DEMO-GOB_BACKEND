@@ -27,6 +27,8 @@ try {
     if ($method === 'GET' && $path === '/api/session') {
         json_response([
             'establishment' => siscat_establishment(),
+            'establishments' => siscat_establishments(),
+            'categories' => siscat_categories(),
             'user' => siscat_user(),
             'modules' => siscat_modules(),
         ]);
@@ -35,6 +37,8 @@ try {
     if ($method === 'GET' && $path === '/api/catalog') {
         json_response([
             'establishment' => siscat_establishment(),
+            'establishments' => siscat_establishments(),
+            'categories' => siscat_categories(),
             'modules' => siscat_modules(),
             'upss' => siscat_upss(),
             'services' => siscat_services(),
@@ -67,6 +71,18 @@ try {
 
     if ($method === 'GET' && $path === '/api/captures') {
         json_response(['captures' => read_captures()]);
+    }
+
+    if ($method === 'DELETE' && preg_match('#^/api/captures/([^/]+)$#', $path, $matches)) {
+        json_response(['capture' => delete_capture(rawurldecode($matches[1]))]);
+    }
+
+    if ($method === 'GET' && preg_match('#^/api/uploads/(.+)$#', $path, $matches)) {
+        stream_uploaded_file(rawurldecode($matches[1]));
+    }
+
+    if ($method === 'DELETE' && preg_match('#^/api/uploads/(.+)$#', $path, $matches)) {
+        json_response(['file' => delete_uploaded_file(rawurldecode($matches[1]))]);
     }
 
     if ($method === 'POST' && $path === '/api/captures') {

@@ -12,6 +12,49 @@ function siscat_establishment(): array
     ];
 }
 
+function siscat_categories(): array
+{
+    return [
+        ['code' => 'I-1-CPA', 'label' => 'PRIMER NIVEL DE ATENCION - I-1 (CPA)'],
+        ['code' => 'I-2-CPA', 'label' => 'PRIMER NIVEL DE ATENCION - I-2 (CPA)'],
+        ['code' => 'I-3-CPA', 'label' => 'PRIMER NIVEL DE ATENCION - I-3 (CPA)'],
+        ['code' => 'I-4-CPA', 'label' => 'PRIMER NIVEL DE ATENCION - I-4 (CPA)'],
+        ['code' => 'II-1-AG', 'label' => 'SEGUNDO NIVEL - II-1 (AG)'],
+        ['code' => 'II-2-AG', 'label' => 'SEGUNDO NIVEL - II-2 (AG)'],
+        ['code' => 'II-E-AE', 'label' => 'SEGUNDO NIVEL - II-E (AE)'],
+        ['code' => 'III-E-AE', 'label' => 'TERCER NIVEL - III-E (AE)'],
+        ['code' => 'III-2-AE', 'label' => 'TERCER NIVEL - III-2 (AE)'],
+    ];
+}
+
+function siscat_establishments(): array
+{
+    return [
+        siscat_establishment(),
+        establishment('7-junio-ahuihua', '7 DE JUNIO-AHUIHUA (I-1)', 'HUALLAGA', 'SAPOSOA', 'SALUD HUALLAGA CENTRAL', 'PRIMER NIVEL DE ATENCION - I-1 (CPA)'),
+        establishment('achinamiza', 'ACHINAMIZA (I-1)', 'SAN MARTIN', 'CHAZUTA', 'SALUD SAN MARTIN', 'PRIMER NIVEL DE ATENCION - I-1 (CPA)'),
+        establishment('agua-azul', 'AGUA AZUL (I-1)', 'HUALLAGA', 'SAPOSOA', 'SALUD HUALLAGA CENTRAL', 'PRIMER NIVEL DE ATENCION - I-1 (CPA)'),
+        establishment('agua-blanca', 'AGUA BLANCA (I-2)', 'EL DORADO', 'AGUA BLANCA', 'SALUD SAN MARTIN', 'PRIMER NIVEL DE ATENCION - I-2 (CPA)'),
+        establishment('aguano-muyuna', 'AGUANO MUYUNA (I-1)', 'SAN MARTIN', 'CHAZUTA', 'SALUD SAN MARTIN', 'PRIMER NIVEL DE ATENCION - I-1 (CPA)'),
+        establishment('aguas-claras', 'AGUAS CLARAS (I-2)', 'RIOJA', 'NARANJOS', 'SALUD ALTO MAYO', 'PRIMER NIVEL DE ATENCION - I-2 (CPA)'),
+        establishment('alfonso-ugarte-lamas', 'ALFONSO UGARTE (I-1)', 'LAMAS', 'CAYNARACHI', 'SALUD SAN MARTIN', 'PRIMER NIVEL DE ATENCION - I-1 (CPA)'),
+        establishment('alfonso-ugarte-picota', 'ALFONSO UGARTE (I-1)', 'PICOTA', 'LEONCIO PRADO', 'SALUD SAN MARTIN', 'PRIMER NIVEL DE ATENCION - I-1 (CPA)'),
+        establishment('alianza', 'ALIANZA (I-2)', 'LAMAS', 'CAYNARACHI', 'SALUD SAN MARTIN', 'PRIMER NIVEL DE ATENCION - I-2 (CPA)'),
+    ];
+}
+
+function establishment(string $id, string $name, string $network, string $microNetwork, string $healthNetwork, string $category): array
+{
+    return [
+        'id' => $id,
+        'name' => $name,
+        'network' => $network,
+        'micro_network' => $microNetwork,
+        'health_network' => $healthNetwork,
+        'category' => $category,
+    ];
+}
+
 function siscat_user(): array
 {
     return [
@@ -173,6 +216,7 @@ function find_item(string $itemId): ?array
 function create_capture(array $payload, array $files): array
 {
     $id = 'cap_' . bin2hex(random_bytes(8));
+    $createdAt = date(DATE_ATOM);
     $storedFiles = [];
     $uploadDir = storage_path('uploads');
 
@@ -198,12 +242,17 @@ function create_capture(array $payload, array $files): array
             'stored_name' => $storedName,
             'type' => $file['type'],
             'size' => $file['size'],
+            'status' => 'Actualizado',
+            'activity_date' => $createdAt,
+            'updated_at' => $createdAt,
+            'url' => '/api/uploads/' . rawurlencode($storedName),
         ];
     }
 
     $capture = [
         'id' => $id,
-        'created_at' => date(DATE_ATOM),
+        'created_at' => $createdAt,
+        'updated_at' => $createdAt,
         'establishment_id' => siscat_establishment()['id'],
         'data' => $payload,
         'files' => $storedFiles,
@@ -234,4 +283,135 @@ function read_captures(): array
     }
 
     return array_reverse($captures);
+}
+
+function delete_capture(string $captureId): array
+{
+    $safeId = safe_filename(basename($captureId));
+    $capturesFile = storage_path('captures.jsonl');
+
+    if (!is_file($capturesFile)) {
+        json_error('Informe no encontrado.', 404);
+    }
+
+    $found = false;
+    $filesDeleted = 0;
+    $updatedCaptures = [];
+
+    foreach (file($capturesFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+        $capture = json_decode($line, true);
+        if (!is_array($capture)) {
+            continue;
+        }
+
+        if (($capture['id'] ?? '') === $safeId) {
+            $found = true;
+            foreach (($capture['files'] ?? []) as $file) {
+                $storedName = safe_filename(basename((string) ($file['stored_name'] ?? '')));
+                if ($storedName === '') {
+                    continue;
+                }
+
+                $filePath = storage_path('uploads') . DIRECTORY_SEPARATOR . $storedName;
+                if (is_file($filePath)) {
+                    unlink($filePath);
+                    $filesDeleted++;
+                }
+            }
+            continue;
+        }
+
+        $updatedCaptures[] = json_encode($capture, JSON_UNESCAPED_SLASHES);
+    }
+
+    if (!$found) {
+        json_error('Informe no encontrado.', 404);
+    }
+
+    file_put_contents(
+        $capturesFile,
+        $updatedCaptures === [] ? '' : implode(PHP_EOL, $updatedCaptures) . PHP_EOL,
+        LOCK_EX
+    );
+
+    return [
+        'id' => $safeId,
+        'deleted' => true,
+        'files_deleted' => $filesDeleted,
+    ];
+}
+
+function stream_uploaded_file(string $storedName): never
+{
+    $safeName = safe_filename(basename($storedName));
+    $file = storage_path('uploads') . DIRECTORY_SEPARATOR . $safeName;
+
+    if (!is_file($file)) {
+        json_error('Archivo no encontrado.', 404);
+    }
+
+    $mimeType = mime_content_type($file) ?: 'application/octet-stream';
+    header('Content-Type: ' . $mimeType);
+    header('Content-Length: ' . (string) filesize($file));
+    header('Content-Disposition: inline; filename="' . $safeName . '"');
+    readfile($file);
+    exit;
+}
+
+function delete_uploaded_file(string $storedName): array
+{
+    $safeName = safe_filename(basename($storedName));
+    $capturesFile = storage_path('captures.jsonl');
+
+    if (!is_file($capturesFile)) {
+        json_error('Archivo no encontrado.', 404);
+    }
+
+    $found = false;
+    $updatedCaptures = [];
+    foreach (file($capturesFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+        $capture = json_decode($line, true);
+        if (!is_array($capture)) {
+            continue;
+        }
+
+        $captureChanged = false;
+        $files = [];
+        foreach (($capture['files'] ?? []) as $file) {
+            if (($file['stored_name'] ?? '') === $safeName) {
+                $found = true;
+                $captureChanged = true;
+                continue;
+            }
+
+            $files[] = $file;
+        }
+
+        $capture['files'] = $files;
+        if ($captureChanged) {
+            $capture['updated_at'] = date(DATE_ATOM);
+        }
+
+        $updatedCaptures[] = json_encode($capture, JSON_UNESCAPED_SLASHES);
+    }
+
+    if (!$found) {
+        json_error('Archivo no encontrado.', 404);
+    }
+
+    file_put_contents(
+        $capturesFile,
+        $updatedCaptures === [] ? '' : implode(PHP_EOL, $updatedCaptures) . PHP_EOL,
+        LOCK_EX
+    );
+
+    $filePath = storage_path('uploads') . DIRECTORY_SEPARATOR . $safeName;
+    if (is_file($filePath)) {
+        unlink($filePath);
+    }
+
+    return [
+        'stored_name' => $safeName,
+        'deleted' => true,
+    ];
 }
